@@ -10,7 +10,7 @@ test('formFrom_roundtrip_keeps_values', () => {
   const f = O.formFrom(cur());
   assert.equal(f.items.MK1.num, '8'); assert.equal(f.items.MK1.observing, '8'); assert.equal(f.items.MK3.den, '1025');
   const p = O.plan(cur(), form(cur()), '2026-11-19T10:00:00Z', '조재연', '시험', names);
-  assert.deepEqual(p.errors, []); assert.equal(p.changes.length, 1); // 값 반올림(30.73→30.7)만 바뀜 표시
+  assert.deepEqual(p.errors, []); assert.equal(p.changes.length, 0); // 반올림 차이(30.73→30.7)는 바뀐 것으로 치지 않음
   assert.equal(p.next.items.MK1.breakdown.length, 2); // 같은 마감일이면 집계 내역 유지
   assert.equal(p.next.rev, 1); assert.equal(p.next.updatedBy, '조재연');
 });

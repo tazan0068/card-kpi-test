@@ -301,5 +301,5 @@ test('official_input_button_and_alt_line', () => {
   const s = F.base(); s.kpiOfficial = { cutoff: '2026-10-20', updatedBy: '조재연', updatedAt: '2026-11-19T10:05:00Z', items: { MK1: { num: 8, den: 25, value: 32, unit: '곳', memo: '모수 정정 2곳 제외', alt: { label: '구매 포함', num: 12, den: 25, value: 48, note: '최소값' } } } };
   const m = C.buildModel(s, '2026-11', {});
   const h = T.renderHtml(m, { state: 'ready', month: '2026-11' });
-  ['data-kpi-act="officialOpen"', '최신 숫자 입력 · 이력', '참고 · 구매 포함 <b>48.0%</b> (12/25) · 최소값', '모수 정정 2곳 제외', '마지막 입력 조재연 11-19 ' + (() => { const d = new Date('2026-11-19T10:05:00Z'); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); })()].forEach(x => assert.ok(h.includes(x), '없음: ' + x));
+  ['data-kpi-act="refreshOpen"', '데이터 파일로 최신화', 'data-kpi-act="officialOpen"', '직접 고치기 · 이력', '참고 · 구매 포함 <b>48.0%</b> (12/25) · 최소값', '모수 정정 2곳 제외', '마지막 입력 조재연 11-19 ' + (() => { const d = new Date('2026-11-19T10:05:00Z'); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); })()].forEach(x => assert.ok(h.includes(x), '없음: ' + x));
 });

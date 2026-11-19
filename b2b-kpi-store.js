@@ -1,6 +1,6 @@
 /* §B2B KPI 탭 — 업무트래커(Firebase Realtime Database, shared/b2bOpsTracker) 읽기·쓰기.
    쓰기는 PATCH 로 "컬렉션/ID" 단위만 보낸다(트래커와 같은 방식, 문서 전체 덮어쓰기 없음).
-   이 탭이 쓰는 위치: members(새 사람)·leadDefs·lagDefs·perfMonthly(세부업무 진행률)·perfHistory·kpiTeamChecks·kpiBuild·kpiTabConfig·kpiOfficial·kpiOfficialHistory.
+   이 탭이 쓰는 위치: members(새 사람)·leadDefs·lagDefs·perfMonthly(세부업무 진행률)·perfHistory·kpiTeamChecks·kpiBuild·kpiTabConfig·kpiOfficial·kpiOfficialHistory·kpiCohortRules.
    삭제(null)는 보내지 않는다. 고객관리카드 Firestore 는 건드리지 않는다. */
 (function(){
   'use strict';
@@ -110,6 +110,11 @@
         return patch(body).then(function(){ return { ok: true, value: next, history: h }; });
       });
     }
+    /* KPI1 모수 규칙(통합ID·날짜·사유만, 업체명 없음) */
+    function saveCohortRules(rules, by){
+      var v = { rules: copy(rules) || { exclude: {}, add: {} }, updatedAt: new Date().toISOString(), by: by || '' };
+      return patch({ kpiCohortRules: v }).then(function(){ return v; });
+    }
     /* 시험 위치가 비어 있으면 운영 값을 한 번 복사해 온다(운영 위치에는 쓰지 않음). opt.seedFrom 이 없으면(테스트) 그냥 읽는다. */
     function read(){
       return get('').then(function(cur){
@@ -124,7 +129,7 @@
         });
       });
     }
-    return { setBuildState: setBuildState, saveOfficial: saveOfficial, read: read, saveDef: saveDef, setTaskProg: setTaskProg, toggleTeamCheck: toggleTeamCheck, saveConfig: saveConfig, addTabMember: addTabMember };
+    return { setBuildState: setBuildState, saveOfficial: saveOfficial, saveCohortRules: saveCohortRules, read: read, saveDef: saveDef, setTaskProg: setTaskProg, toggleTeamCheck: toggleTeamCheck, saveConfig: saveConfig, addTabMember: addTabMember };
   }
 
   var api = { PROD: PROD, TEST: TEST, resolveBase: resolveBase, createStore: createStore };

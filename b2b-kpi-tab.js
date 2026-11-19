@@ -174,7 +174,7 @@
     // ① 3대 KPI — 화면 맨 위(카드·마감 확인분 안내·참고 영역)
     out += sec(N[0], '3대 KPI', (a.cutoff ? esc(cutoffShort(a.cutoff)) + ' 마감 확인분' : '') + (a.updatedBy ? ' · 마지막 입력 ' + esc(a.updatedBy) + ' ' + esc(localStamp(a.updatedAt)) : ''), '<div class="b2bkpi-kpis">' + a.rows.map(function(r){ return kpiCard(r, !!osOf(ui)); }).join('') + '</div>' +
       (a.cutoff ? '<p class="b2bkpi-muted b2bkpi-cutoff"><b>위 3개 값은 ' + esc(cutoffShort(a.cutoff)) + ' 마감 확인분이며 그 뒤 실적은 아직 반영되지 않았습니다.</b> 전체 공식 최신 실적이 아니고, 분모·연결 기준이 달라 다른 숫자와 직접 증감 비교하지 않습니다. 막대는 관측 비율, 세로선은 목표입니다.</p>' : '') +
-      referenceArea(a), '<button type="button" class="b2bkpi-btn is-primary b2bkpi-offbtn" data-kpi-act="officialOpen">최신 숫자 입력 · 이력</button>');
+      referenceArea(a), '<span class="b2bkpi-offbtns"><button type="button" class="b2bkpi-btn is-primary" data-kpi-act="refreshOpen">데이터 파일로 최신화</button><button type="button" class="b2bkpi-btn" data-kpi-act="officialOpen">직접 고치기 · 이력</button></span>');
     var kpiHtml = out; out = '';
     // ② 종합 KPI
     out += sec(N[1], '종합 KPI', '', '<div class="b2bkpi-big">' +
@@ -487,7 +487,7 @@
     if(!list.length) return '<p class="b2bkpi-muted">아직 이 화면에서 바꾼 기록이 없습니다. 지금 값은 처음 정리된 확인분입니다.</p>';
     return '<div class="b2bkpi-offhist">' + list.map(function(h){
       var when = localStamp(h.at, true);
-      return '<div class="b2bkpi-offh"><div class="b2bkpi-offh-h"><b>' + esc(when) + '</b> · ' + esc(h.by || '—') + (h.kind === 'revert' ? ' ' + pill('wait', '되돌림') : '') + '</div>' +
+      return '<div class="b2bkpi-offh"><div class="b2bkpi-offh-h"><b>' + esc(when) + '</b> · ' + esc(h.by || '—') + (h.kind === 'revert' ? ' ' + pill('wait', '되돌림') : h.kind === 'file' ? ' ' + pill('auto', '파일 반영') : '') + '</div>' +
         (h.reason ? '<div class="b2bkpi-muted">' + esc(h.reason) + '</div>' : '') +
         '<ul class="b2bkpi-offh-c">' + (h.changes || []).map(function(c){ return '<li>' + esc(c.f) + ': ' + esc(c.from) + ' → <b>' + esc(c.to) + '</b></li>'; }).join('') + '</ul>' +
         (h.before ? '<button type="button" class="b2bkpi-btn" data-m="revertOff" data-h="' + esc(h.id) + '">이 변경 전 값으로 되돌리기</button>' : '') + '</div>';
@@ -551,6 +551,79 @@
     if(p.errors.length) return offErr(p.errors.join(' / ') + (String(f.by || '').trim() ? '' : ' (위 "입력한 사람" 칸에 이름을 넣어 주세요)'));
     offSave(p.next, { kind: 'revert', reason: '되돌림: ' + ((h && h.reason) || ''), changes: O.diff(cur, p.next, kpiNames()), revertOf: id }, btn);
   }
+  /* ---- 데이터 파일로 최신화: 원장(필수)·신규 명단(KPI1) → 같은 정의로 다시 세기 → 지금 값과 비교 → 반영 ---- */
+  function refreshRules(){ var r = st.shape && st.shape.kpiCohortRules; return (r && r.rules) || window.B2BKpiRefresh.DEFAULT_RULES; }
+  function refreshResultHtml(){
+    var R = st.refresh || {}, c = R.comp, cur = (st.shape && st.shape.kpiOfficial) || {}, names = kpiNames();
+    if(R.error) return '<div class="b2bkpi-note">' + esc(R.error) + '</div>';
+    if(!c) return '<p class="b2bkpi-muted">원장 파일을 고르면 바로 계산합니다. 파일은 이 화면에서만 읽고 어디에도 올리지 않습니다.</p>';
+    var rows = ['MK1', 'MK3', 'MK2'].map(function(id){
+      var x = c.items[id], o = (cur.items || {})[id], f = function(n, d){ return d ? f1(n / d * 100) + '% (' + n.toLocaleString('ko-KR') + '/' + d.toLocaleString('ko-KR') + ')' : '—'; };
+      return '<tr><td>' + esc(names[id] || id) + '</td><td>' + (o && typeof o.num === 'number' ? f(o.num, o.den) : '—') + '</td><td><b>' + (x ? f(x.num, x.den) : '그대로 둠') + '</b></td><td>' + (x ? x.observing.toLocaleString('ko-KR') : '—') + '</td></tr>';
+    }).join('');
+    var older = cur.cutoff && c.asOf < cur.cutoff;
+    return '<div class="b2bkpi-refsum"><b>자료 기준일 ' + esc(c.asOf) + '</b> <span class="b2bkpi-muted">· 원장 기록 ' + c.events.toLocaleString('ko-KR') + '건 · 지금 화면 기준일 ' + esc(cur.cutoff || '없음') + '</span></div>' +
+      (older ? '<div class="b2bkpi-note">이 파일은 지금 화면 값(' + esc(cur.cutoff) + ')보다 오래된 자료입니다. 반영하면 숫자가 과거로 돌아갑니다.</div>' : '') +
+      '<div class="b2bkpi-tw"><table class="b2bkpi-reftbl"><thead><tr><th>KPI</th><th>지금 값</th><th>파일에서 센 값</th><th>관찰 중</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
+      (c.warnings.length ? '<ul class="b2bkpi-refwarn">' + c.warnings.map(function(w){ return '<li>' + esc(w) + '</li>'; }).join('') + '</ul>' : '');
+  }
+  function openRefresh(){
+    st.refresh = st.refresh || {}; st.offOpenedRev = (st.shape && st.shape.kpiOfficial && typeof st.shape.kpiOfficial.rev === 'number') ? st.shape.kpiOfficial.rev : 0;
+    var R = st.refresh, mem = memberNames(), fileRow = function(kind, title, need, hint){
+      var f = R[kind];
+      return '<div class="b2bkpi-refile"><div><b>' + esc(title) + '</b> ' + pill(need ? 'warn' : 'wait', need ? '필수' : 'KPI1용') + '<div class="b2bkpi-muted">' + esc(hint) + '</div>' + (f ? '<div class="b2bkpi-refok">✓ ' + esc(f.name) + ' · ' + f.rows.length.toLocaleString('ko-KR') + '행</div>' : '') + '</div>' +
+        '<label class="b2bkpi-btn b2bkpi-filelab">' + (f ? '다른 파일' : '파일 고르기') + '<input type="file" accept=".csv,text/csv" class="b2bkpi-fileinp" data-refile="' + kind + '"></label></div>';
+    };
+    modalRoot().innerHTML = '<div class="pi-overlay b2bkpi-ov"><div class="pi-panel b2bkpi-modal" role="dialog" aria-modal="true" aria-label="데이터 파일로 최신화"><h3>데이터 파일로 최신화</h3>' +
+      '<p class="b2bkpi-muted">쌓고 있는 원장 파일을 고르면 3대 KPI를 같은 정의로 다시 셉니다. 지금 값과 비교해 보고 반영하면 이력이 남고, "직접 고치기 · 이력"에서 되돌릴 수 있습니다.</p>' +
+      fileRow('ledger', '기준 원장 (L2·L3 사건)', true, '예: 한정정규원장.csv — 통합ID·단지키·공종키·사건유형·사건일 열이 있는 파일') +
+      fileRow('cohort', '신규 협약 명단', false, '예: 신규_HTML36_90일.csv — 없으면 KPI1은 지금 값을 그대로 둡니다') +
+      '<details class="b2bkpi-def"><summary>KPI1 모수 규칙 (업체 통합ID만 · 업체명 쓰지 않기)</summary><div class="b2bkpi-def-b">' +
+      '<textarea class="b2bkpi-in b2bkpi-rules" data-ref="rules" rows="5">' + esc(R.rulesText != null ? R.rulesText : window.B2BKpiRefresh.rulesToText(refreshRules())) + '</textarea>' +
+      '<p class="b2bkpi-muted">한 줄에 하나: "제외 B2B203 사유" 또는 "추가 B2B205 2026-02-02 사유". 상호 변경된 기존 업체, 지표에서 뺄 업체, 명단에 없는 신규 업체를 여기서 정합니다. 반영할 때 같이 저장되어 다음에도 그대로 씁니다.</p>' +
+      '<button type="button" class="b2bkpi-btn" data-m="refreshCalc">규칙 바꾼 뒤 다시 계산</button></div></details>' +
+      '<div id="b2bKpiRefRes">' + refreshResultHtml() + '</div>' +
+      field('반영하는 사람', '<input class="b2bkpi-in" data-ref="by" list="b2bKpiRefBy" placeholder="이름" value="' + esc(R.by || '') + '"><datalist id="b2bKpiRefBy">' + mem.map(function(n){ return '<option value="' + esc(n) + '">'; }).join('') + '</datalist>') +
+      '<div class="b2bkpi-err" id="b2bKpiErr"></div><div class="b2bkpi-mfoot"><button type="button" class="b2bkpi-btn" data-m="cancel">닫기</button><button type="button" class="b2bkpi-btn is-primary" data-m="refreshApply"' + (R.comp ? '' : ' disabled') + '>이 값으로 반영</button></div></div></div>';
+    Array.prototype.slice.call(modalRoot().querySelectorAll('[data-refile]')).forEach(function(inp){ inp.addEventListener('change', onRefreshFile); });
+  }
+  function refreshKeepInputs(){ var root = modalRoot(), r = root.querySelector('[data-ref="rules"]'), b = root.querySelector('[data-ref="by"]'); if(r) st.refresh.rulesText = r.value; if(b) st.refresh.by = b.value; }
+  function refreshCalc(){
+    var R = st.refresh, Rf = window.B2BKpiRefresh; refreshKeepInputs(); R.error = null; R.comp = null;
+    if(!R.ledger) return openRefresh();
+    var pr = Rf.parseRules(R.rulesText != null ? R.rulesText : Rf.rulesToText(refreshRules()));
+    if(pr.errors.length){ R.error = pr.errors.join(' / '); return openRefresh(); }
+    R.rules = pr.rules;
+    try { R.comp = Rf.compute(window.B2BKpiChain, window.B2BKpiDetail, { ledgerRows: R.ledger.rows, cohortRows: R.cohort && R.cohort.rows, rules: pr.rules }); }
+    catch(e){ R.error = String(e && e.message || e); }
+    openRefresh();
+  }
+  function onRefreshFile(e){
+    var inp = e.target, kind = inp.getAttribute('data-refile'), file = inp.files && inp.files[0]; if(!file) return;
+    refreshKeepInputs();
+    var rd = new FileReader();
+    rd.onload = function(){
+      try { var rows = window.B2BKpiDetail.parseCsv(String(rd.result || '')); if(!rows.length) throw new Error('빈 파일입니다'); st.refresh[kind] = { name: file.name, rows: rows }; }
+      catch(err){ st.refresh.error = file.name + ': ' + String(err && err.message || err); return openRefresh(); }
+      refreshCalc();
+    };
+    rd.readAsText(file, 'utf-8');
+  }
+  function refreshApply(btn){
+    if(btn.disabled) return; refreshKeepInputs();
+    var R = st.refresh, Rf = window.B2BKpiRefresh, O = window.B2BKpiOfficial, cur = (st.shape && st.shape.kpiOfficial) || {};
+    if(!R.comp) return offErr('먼저 원장 파일을 골라 계산해 주세요');
+    if(!String(R.by || '').trim()) return offErr('반영하는 사람을 적어 주세요');
+    var files = [R.ledger && R.ledger.name, R.cohort && R.cohort.name].filter(Boolean);
+    var t = Rf.toOfficial(cur, R.comp, new Date().toISOString(), R.by, files);
+    var reason = '파일 반영(' + R.comp.asOf + ' 기준): ' + files.join(', ') + (t.dropped.length ? ' · 기준일이 바뀌어 지운 것: ' + t.dropped.join(', ') : '');
+    btn.disabled = true; btn.textContent = '반영 중…';
+    var rulesP = R.cohort ? window.B2BKpiStore.saveCohortRules(R.rules || refreshRules(), R.by) : Promise.resolve();
+    rulesP.then(function(){ return window.B2BKpiStore.saveOfficial(t.next, st.offOpenedRev, { kind: 'file', reason: reason, changes: O.diff(cur, t.next, kpiNames()) }); }).then(function(r){
+      if(!r.ok){ offErr('다른 팀원이 먼저 저장했습니다. 닫고 다시 열어 주세요'); btn.disabled = false; btn.textContent = '이 값으로 반영'; return; }
+      st.refresh = null; closeModal(); return load();
+    }).catch(function(e){ offErr('반영하지 못했습니다: ' + String(e && e.message || e)); btn.disabled = false; btn.textContent = '이 값으로 반영'; });
+  }
   function onModalClick(e){
     var t = e.target.closest && e.target.closest('[data-m]');
     if(!t){ if(e.target.classList && e.target.classList.contains('b2bkpi-ov')) closeModal(); return; }
@@ -559,6 +632,8 @@
     else if(m === 'save') saveEditor(t);
     else if(m === 'saveShares') saveShares(t);
     else if(m === 'saveOfficial') saveOfficialForm(t);
+    else if(m === 'refreshCalc') refreshCalc();
+    else if(m === 'refreshApply') refreshApply(t);
     else if(m === 'revertOff') revertOfficial(t);
     else if(m === 'addLead' || m === 'addLag'){ var list = modalRoot().querySelector('[data-list="' + (m === 'addLead' ? 'lead' : 'lag') + '"]'); list.insertAdjacentHTML('beforeend', leadRow(null, m === 'addLag')); }
     else if(m === 'rmrow'){ var fs = t.closest('fieldset'); if(fs) fs.remove(); }
@@ -617,6 +692,7 @@
     rd.readAsText(file, 'utf-8');
   }
   var handlers = {
+    refreshOpen: function(){ if(!window.B2BKpiRefresh || !st.shape) return; st.refresh = null; openRefresh(); },
     officialOpen: function(){ if(!window.B2BKpiOfficial || !st.shape) return; openOfficial(); },
     kpiDetail: function(t){ st.ui.detail = t.getAttribute('data-kpi'); render(); var v = el(); if(v) v.scrollTop = 0; },
     ledgerClear: function(){ st.ui.ledger = null; st.ui.ledgerError = null; render(); },

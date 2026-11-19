@@ -77,7 +77,8 @@
     if((a.cutoff || '') !== (b.cutoff || '')) out.push({ f: '마감일', from: a.cutoff || '—', to: b.cutoff || '—' });
     IDS.forEach(function(id){
       var x = (a.items || {})[id] || {}, y = (b.items || {})[id] || {}, nm = names[id] || id;
-      var fx = isNum(x.num) ? x.num + '/' + x.den + ' (' + x.value + '%)' : '—', fy = isNum(y.num) ? y.num + '/' + y.den + ' (' + y.value + '%)' : '—';
+      var show = function(o){ return isNum(o.num) && isNum(o.den) && o.den ? o.num + '/' + o.den + ' (' + round1(o.num / o.den * 100) + '%)' : '—'; };
+      var fx = show(x), fy = show(y);
       if(fx !== fy) out.push({ f: nm, from: fx, to: fy });
       var ax = x.alt ? x.alt.label + ' ' + x.alt.num + '/' + x.alt.den : '—', ay = y.alt ? y.alt.label + ' ' + y.alt.num + '/' + y.alt.den : '—';
       if(ax !== ay) out.push({ f: nm + ' 참고값', from: ax, to: ay });
