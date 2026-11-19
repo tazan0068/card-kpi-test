@@ -353,3 +353,16 @@ test('kpiActual_breakdown_normalized', () => {
   assert.equal(k3.breakdown.length, 1); assert.equal(k3.observing, null); // 숫자가 아닌 항목·빈 항목은 버린다
   assert.equal(C.kpiActual(official(F.base()), M).rows[0].breakdown.length, 0); // 없으면 빈 목록
 });
+
+// ---- 참고값(alt)·메모·마지막 입력자 — 확인분 입력창(2026-11 시험 사본) ----
+test('kpiActual_alt_memo_updatedBy', () => {
+  const s = official(F.base());
+  s.kpiOfficial.items.MK1.alt = { label: '구매 포함', num: 12, den: 25, value: 48, note: '최소값' };
+  s.kpiOfficial.items.MK1.memo = '모수 정정 2곳 제외 · 2곳 추가';
+  s.kpiOfficial.items.MK3.alt = { label: '깨짐', num: 1, den: 0 };
+  s.kpiOfficial.updatedBy = '조재연'; s.kpiOfficial.updatedAt = '2026-11-19T10:00:00Z';
+  const a = C.kpiActual(s, M); const [k1, k2] = a.rows;
+  assert.equal(k1.alt.value, 48); assert.equal(k1.alt.label, '구매 포함'); assert.equal(k1.memo, '모수 정정 2곳 제외 · 2곳 추가');
+  assert.equal(k2.alt, null); assert.equal(k1.rate, 32); // 참고값은 공식 값을 바꾸지 않음
+  assert.equal(a.updatedBy, '조재연');
+});

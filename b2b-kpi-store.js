@@ -1,6 +1,6 @@
 /* §B2B KPI 탭 — 업무트래커(Firebase Realtime Database, shared/b2bOpsTracker) 읽기·쓰기.
    쓰기는 PATCH 로 "컬렉션/ID" 단위만 보낸다(트래커와 같은 방식, 문서 전체 덮어쓰기 없음).
-   이 탭이 쓰는 위치: members(새 사람)·leadDefs·lagDefs·perfMonthly(세부업무 진행률)·perfHistory·kpiTeamChecks·kpiBuild·kpiTabConfig.
+   이 탭이 쓰는 위치: members(새 사람)·leadDefs·lagDefs·perfMonthly(세부업무 진행률)·perfHistory·kpiTeamChecks·kpiBuild·kpiTabConfig·kpiOfficial·kpiOfficialHistory.
    삭제(null)는 보내지 않는다. 고객관리카드 Firestore 는 건드리지 않는다. */
 (function(){
   'use strict';
@@ -98,6 +98,18 @@
       var v = { id: id, state: state, updatedAt: new Date().toISOString(), by: actor }, body = {}; body['kpiBuild/' + id] = v;
       return patch(body).then(function(){ return v; });
     }
+    /* 3대 KPI 확인분 저장 — 연 때의 rev 와 원격 rev 가 다르면 멈춘다(다른 팀원이 먼저 저장). 바꾸기 전 값을 통째로 이력에 남긴다.
+       kind: 'edit' | 'revert'. 이력은 지우지 않는다. */
+    function saveOfficial(next, openedRev, meta){
+      return get('kpiOfficial').then(function(remote){
+        var rrev = (remote && typeof remote.rev === 'number') ? remote.rev : 0;
+        if(rrev !== (openedRev || 0)) return { ok: false, reason: 'conflict' };
+        var h = { id: hid(), kind: (meta && meta.kind) || 'edit', at: next.updatedAt, by: next.updatedBy, reason: (meta && meta.reason) || '',
+          changes: (meta && meta.changes) || [], before: remote || null, after: next, revertOf: (meta && meta.revertOf) || null };
+        var body = { kpiOfficial: next }; body['kpiOfficialHistory/' + h.id] = h;
+        return patch(body).then(function(){ return { ok: true, value: next, history: h }; });
+      });
+    }
     /* 시험 위치가 비어 있으면 운영 값을 한 번 복사해 온다(운영 위치에는 쓰지 않음). opt.seedFrom 이 없으면(테스트) 그냥 읽는다. */
     function read(){
       return get('').then(function(cur){
@@ -112,7 +124,7 @@
         });
       });
     }
-    return { setBuildState: setBuildState, read: read, saveDef: saveDef, setTaskProg: setTaskProg, toggleTeamCheck: toggleTeamCheck, saveConfig: saveConfig, addTabMember: addTabMember };
+    return { setBuildState: setBuildState, saveOfficial: saveOfficial, read: read, saveDef: saveDef, setTaskProg: setTaskProg, toggleTeamCheck: toggleTeamCheck, saveConfig: saveConfig, addTabMember: addTabMember };
   }
 
   var api = { PROD: PROD, TEST: TEST, resolveBase: resolveBase, createStore: createStore };

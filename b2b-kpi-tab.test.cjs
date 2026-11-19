@@ -174,7 +174,7 @@ test('render_cumulative', () => {
 test('render_official_kpi', () => {
   const s = F.base(); s.kpiOfficial = { cutoff: '2026-10-20', note: '확인분', items: { MK1: { num: 8, den: 25, value: 32, unit: '곳' }, MK3: { num: 315, den: 1025, value: 30.73, unit: '기회' }, MK2: { num: 44, den: 79, value: 55.7, unit: '곳' } } };
   const h = R(s);
-  ['32.0%', '8/25 곳 · 10/20 마감 확인분', '30.7%', '315/1,025 기회 · 10/20 마감 확인분', '55.7%', '44/79 곳 · 10/20 마감 확인분', '10/20 마감 확인분이며 11월 최신 실적이 아닙니다', '다른 정의의 자동값 참고 17.6%'].forEach(t => assert.ok(h.includes(t), '없음: ' + t));
+  ['32.0%', '8/25 곳 · 10/20 마감 확인분', '30.7%', '315/1,025 기회 · 10/20 마감 확인분', '55.7%', '44/79 곳 · 10/20 마감 확인분', '10/20 마감 확인분이며 그 뒤 실적은 아직 반영되지 않았습니다', '다른 정의의 자동값 참고 17.6%'].forEach(t => assert.ok(h.includes(t), '없음: ' + t));
 });
 
 // ---- 1·2차 미팅 누락 방지 실측 표시 ----
@@ -215,7 +215,7 @@ const officialShape = () => { const s = F.base(); s.kpiOfficial = { cutoff: '202
 test('render_official_actual_wait_and_reference_area', () => {
   const h = R(officialShape());
   ['공식 실적 산출 대기', '참고 · 확인분 3개 평균', '공식 점수가 아닙니다', '종합점수 적용 기준: 미확정', '팀장님 확인 대기',
-    '도전 95% 기준 55.3%', '하한 85% 기준 57.6%', '10/20 마감 확인분', '11월 최신 실적이 아닙니다', '공식 실적 60%는 산출 대기'].forEach(t => assert.ok(h.includes(t), '없음: ' + t));
+    '도전 95% 기준 55.3%', '하한 85% 기준 57.6%', '10/20 마감 확인분', '그 뒤 실적은 아직 반영되지 않았습니다', '공식 실적 60%는 산출 대기'].forEach(t => assert.ok(h.includes(t), '없음: ' + t));
   assert.ok(!h.includes('실제 KPI 실적 (60%)'), '옛 표기 남음');
   assert.ok(!h.includes('하한 85% 기준이면'), '옛 점수 안내 남음');
 });
@@ -251,7 +251,7 @@ test('render_kpi_cards_first_then_composite', () => {
   const h = R(officialShape());
   const order = ['① 3대 KPI', '② 종합 KPI', '③ 뒤처진 부분', '④ 팀 진척', '⑤ 팀원 진척', '⑥ 점수 반영 흐름'].map(t => { const i = h.indexOf(t); assert.ok(i >= 0, '없음: ' + t); return i; });
   order.reduce((prev, cur, k) => { assert.ok(cur > prev, '순서 어긋남 ' + k); return cur; }, -1);
-  const iCards = h.indexOf('b2bkpi-kpis'), iComp = h.indexOf('종합점수 (반영된 부분)'), iRef = h.indexOf('참고 · 확인분 3개 평균'), iCut = h.indexOf('11월 최신 실적이 아닙니다');
+  const iCards = h.indexOf('b2bkpi-kpis'), iComp = h.indexOf('종합점수 (반영된 부분)'), iRef = h.indexOf('참고 · 확인분 3개 평균'), iCut = h.indexOf('그 뒤 실적은 아직 반영되지 않았습니다');
   assert.ok(iCards >= 0 && iCards < iComp, 'KPI 카드가 종합보다 위');
   assert.ok(iCut > iCards && iCut < iComp, '마감 확인분 안내는 카드 바로 아래, 종합 위');
   assert.ok(iRef > iCut && iRef < iComp, '참고 영역도 종합 위');
@@ -295,4 +295,11 @@ test('os_menu_click_handler_and_wiring', () => {
 test('os_css_menu_mobile_friendly', () => {
   assert.ok(css.includes('.b2bkpi-menu{') && css.includes('.b2bkpi-menubtn{'));
   assert.ok(/\.b2bkpi-menubtn\{[^}]*min-height:44px/.test(css), '터치 44px');
+});
+
+test('official_input_button_and_alt_line', () => {
+  const s = F.base(); s.kpiOfficial = { cutoff: '2026-10-20', updatedBy: '조재연', updatedAt: '2026-11-19T10:05:00Z', items: { MK1: { num: 8, den: 25, value: 32, unit: '곳', memo: '모수 정정 2곳 제외', alt: { label: '구매 포함', num: 12, den: 25, value: 48, note: '최소값' } } } };
+  const m = C.buildModel(s, '2026-11', {});
+  const h = T.renderHtml(m, { state: 'ready', month: '2026-11' });
+  ['data-kpi-act="officialOpen"', '최신 숫자 입력 · 이력', '참고 · 구매 포함 <b>48.0%</b> (12/25) · 최소값', '모수 정정 2곳 제외', '마지막 입력 조재연 11-19 10:05'].forEach(x => assert.ok(h.includes(x), '없음: ' + x));
 });

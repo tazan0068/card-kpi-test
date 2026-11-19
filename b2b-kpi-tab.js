@@ -90,8 +90,9 @@
     return '<div class="b2bkpi-card b2bkpi-kpi is-' + esc(String(r.label || '').toLowerCase()) + '"><div class="b2bkpi-kpi-tag">' + pill('kpi', r.label) + (r.auto ? pill('auto', '자동') : '') + '</div><div class="b2bkpi-kpi-name">' + esc(r.name) + '</div>' +
       '<div class="b2bkpi-kpi-val"><b>' + (r.rate == null ? '—' : f1(r.rate) + '%') + '</b></div>' +
       (r.num != null && r.den != null ? '<div class="b2bkpi-muted">' + (r.source === 'official' ? esc(r.num.toLocaleString('ko-KR') + '/' + r.den.toLocaleString('ko-KR') + ' ' + (r.unit || '') + ' · ' + cutoffShort(r.cutoff) + ' 마감 확인분') : r.num + ' / ' + r.den) + '</div>' : '') +
+      (r.alt ? '<div class="b2bkpi-alt">참고 · ' + esc(r.alt.label) + ' <b>' + f1(r.alt.value) + '%</b> (' + r.alt.num + '/' + r.alt.den + ')' + (r.alt.note ? ' · ' + esc(r.alt.note) : '') + '</div>' : '') +
       '<div class="b2bkpi-goal">' + esc(goalText(r)) + '</div>' + bar(r) + (r.floor ? floorLines(r) : '') + '<div class="b2bkpi-kpi-foot"><span class="b2bkpi-muted">' + (r.floor ? '도전 목표 대비 달성 ' : '목표 대비 달성 ') + pct(r.ach) + '</span>' + p + '</div>' +
-      '<div class="b2bkpi-kpi-desc">' + esc(r.desc || '') + '</div>' + obsLine(r) + defBlock(r) + breakdownBlock(r) +
+      '<div class="b2bkpi-kpi-desc">' + esc(r.desc || '') + '</div>' + (r.memo ? '<div class="b2bkpi-memo">' + esc(r.memo) + '</div>' : '') + obsLine(r) + defBlock(r) + breakdownBlock(r) +
       (r.source === 'official' && r.autoRate != null ? '<div class="b2bkpi-muted b2bkpi-autoref">다른 정의의 자동값 참고 ' + f1(r.autoRate) + '% (' + r.autoNum + '/' + r.autoDen + ') · 위 정의와 달라 비교하지 않습니다</div>' : '') +
       (withDetail ? '<div class="b2bkpi-kpi-more"><button type="button" class="b2bkpi-btn" data-kpi-act="kpiDetail" data-kpi="' + esc(r.id) + '">상세 보기</button></div>' : '') + '</div>';
   }
@@ -169,9 +170,9 @@
     var persPts = persOk.reduce(function(s, p){ return s + p.points; }, 0);
     var out = '';
     // ① 3대 KPI — 화면 맨 위(카드·마감 확인분 안내·참고 영역)
-    out += sec(N[0], '3대 KPI', a.cutoff ? esc(cutoffShort(a.cutoff)) + ' 마감 확인분' : '', '<div class="b2bkpi-kpis">' + a.rows.map(function(r){ return kpiCard(r, !!osOf(ui)); }).join('') + '</div>' +
-      (a.cutoff ? '<p class="b2bkpi-muted b2bkpi-cutoff"><b>위 3개 값은 ' + esc(cutoffShort(a.cutoff)) + ' 마감 확인분이며 11월 최신 실적이 아닙니다.</b> 전체 공식 최신 실적이 아니고, 분모·연결 기준이 달라 다른 숫자와 직접 증감 비교하지 않습니다. 막대는 관측 비율, 세로선은 목표입니다.</p>' : '') +
-      referenceArea(a));
+    out += sec(N[0], '3대 KPI', (a.cutoff ? esc(cutoffShort(a.cutoff)) + ' 마감 확인분' : '') + (a.updatedBy ? ' · 마지막 입력 ' + esc(a.updatedBy) + ' ' + esc(String(a.updatedAt || '').slice(5, 16).replace('T', ' ')) : ''), '<div class="b2bkpi-kpis">' + a.rows.map(function(r){ return kpiCard(r, !!osOf(ui)); }).join('') + '</div>' +
+      (a.cutoff ? '<p class="b2bkpi-muted b2bkpi-cutoff"><b>위 3개 값은 ' + esc(cutoffShort(a.cutoff)) + ' 마감 확인분이며 그 뒤 실적은 아직 반영되지 않았습니다.</b> 전체 공식 최신 실적이 아니고, 분모·연결 기준이 달라 다른 숫자와 직접 증감 비교하지 않습니다. 막대는 관측 비율, 세로선은 목표입니다.</p>' : '') +
+      referenceArea(a), '<button type="button" class="b2bkpi-btn is-primary b2bkpi-offbtn" data-kpi-act="officialOpen">최신 숫자 입력 · 이력</button>');
     var kpiHtml = out; out = '';
     // ② 종합 KPI
     out += sec(N[1], '종합 KPI', '', '<div class="b2bkpi-big">' +
@@ -475,6 +476,79 @@
     var cfg = JSON.parse(JSON.stringify((st.shape && st.shape.kpiTabConfig) || {})); cfg.members = ids; cfg.shares = map;
     window.B2BKpiStore.saveConfig(cfg, ACTOR, st.shareOpenedAt).then(function(r){ if(!r.ok) throw new Error('다른 관리자가 먼저 바꿨습니다. 창을 닫고 다시 열어 주세요'); closeModal(); return load(); }).catch(function(e){ btn.disabled = false; document.getElementById('b2bKpiErr').textContent = '저장하지 못했습니다: ' + (e && e.message || e); });
   }
+  /* ---- 3대 KPI 최신 숫자 입력 · 이력 · 되돌리기 (팀원 누구나) ---- */
+  function kpiNames(){ var n = {}; (window.B2BKpiCalc.KPIS || []).forEach(function(k){ n[k.id] = k.label + ' ' + k.name; }); return n; }
+  function memberNames(){ var m = (st.shape && st.shape.members) || {}; return Object.keys(m).map(function(k){ return m[k] && m[k].name; }).filter(Boolean); }
+  function offInput(attr, v, ph, mode){ return '<input class="b2bkpi-in" ' + attr + ' value="' + esc(v) + '"' + (ph ? ' placeholder="' + esc(ph) + '"' : '') + (mode ? ' inputmode="' + mode + '"' : '') + '>'; }
+  function officialHistHtml(){
+    var O = window.B2BKpiOfficial, list = O.history(st.shape).slice(0, 20);
+    if(!list.length) return '<p class="b2bkpi-muted">아직 이 화면에서 바꾼 기록이 없습니다. 지금 값은 처음 정리된 확인분입니다.</p>';
+    return '<div class="b2bkpi-offhist">' + list.map(function(h){
+      var when = String(h.at || '').slice(0, 16).replace('T', ' ');
+      return '<div class="b2bkpi-offh"><div class="b2bkpi-offh-h"><b>' + esc(when) + '</b> · ' + esc(h.by || '—') + (h.kind === 'revert' ? ' ' + pill('wait', '되돌림') : '') + '</div>' +
+        (h.reason ? '<div class="b2bkpi-muted">' + esc(h.reason) + '</div>' : '') +
+        '<ul class="b2bkpi-offh-c">' + (h.changes || []).map(function(c){ return '<li>' + esc(c.f) + ': ' + esc(c.from) + ' → <b>' + esc(c.to) + '</b></li>'; }).join('') + '</ul>' +
+        (h.before ? '<button type="button" class="b2bkpi-btn" data-m="revertOff" data-h="' + esc(h.id) + '">이 변경 전 값으로 되돌리기</button>' : '') + '</div>';
+    }).join('') + '</div>';
+  }
+  function openOfficial(){
+    var O = window.B2BKpiOfficial, cur = (st.shape && st.shape.kpiOfficial) || {}, f = O.formFrom(cur), names = kpiNames(), mem = memberNames();
+    st.offOpenedRev = typeof cur.rev === 'number' ? cur.rev : 0;
+    var today = new Date(), iso = today.getFullYear() + '-' + ('0' + (today.getMonth() + 1)).slice(-2) + '-' + ('0' + today.getDate()).slice(-2);
+    var kpiBox = O.IDS.map(function(id){
+      var x = f.items[id], u = O.UNITS[id];
+      return '<fieldset class="b2bkpi-fs"><legend>' + esc(names[id] || id) + '</legend><div class="b2bkpi-offrow">' +
+        field('분자 (' + u + ')', offInput('data-off="' + id + '.num"', x.num, '', 'numeric')) +
+        field('분모 (' + u + ')', offInput('data-off="' + id + '.den"', x.den, '', 'numeric')) +
+        field('관찰 중 (분모 밖)', offInput('data-off="' + id + '.observing"', x.observing, '선택', 'numeric')) + '</div>' +
+        field('메모 (카드에 보임 · 업체명 쓰지 않기)', offInput('data-off="' + id + '.memo"', x.memo, '예: 모수 정정 2곳 제외 · 2곳 추가')) +
+        '<details class="b2bkpi-def"' + (x.altLabel ? ' open' : '') + '><summary>참고값 (공식 값과 따로 한 줄 표시)</summary><div class="b2bkpi-offrow">' +
+        field('이름', offInput('data-off="' + id + '.altLabel"', x.altLabel, '예: 구매 포함')) +
+        field('분자', offInput('data-off="' + id + '.altNum"', x.altNum, '', 'numeric')) +
+        field('분모', offInput('data-off="' + id + '.altDen"', x.altDen, '', 'numeric')) + '</div>' +
+        field('참고값 설명', offInput('data-off="' + id + '.altNote"', x.altNote, '예: 판매 기록 매칭 약 70%라 최소값')) + '</details></fieldset>';
+    }).join('');
+    modalRoot().innerHTML = '<div class="pi-overlay b2bkpi-ov"><div class="pi-panel b2bkpi-modal" role="dialog" aria-modal="true" aria-label="3대 KPI 최신 숫자 입력"><h3>3대 KPI 최신 숫자 입력</h3>' +
+      '<p class="b2bkpi-muted">팀원 누구나 넣을 수 있습니다. 저장하면 바뀐 내용과 이전 값이 이력에 남고, 아래 이력에서 언제든 되돌릴 수 있습니다. 숫자만 넣고 업체명은 쓰지 않습니다.</p>' +
+      '<div class="b2bkpi-offrow">' + field('입력한 사람', '<input class="b2bkpi-in" data-off="by" list="b2bKpiOffBy" placeholder="이름">' + '<datalist id="b2bKpiOffBy">' + mem.map(function(n){ return '<option value="' + esc(n) + '">'; }).join('') + '</datalist>') +
+      field('마감일 (이 날까지 확인된 숫자)', '<input class="b2bkpi-in" type="date" data-off="cutoff" value="' + esc(f.cutoff || iso) + '">') + '</div>' +
+      field('바꾼 이유 (한 줄)', offInput('data-off="reason"', '', '예: 11/19 마감 확인분 반영, KPI1 모수 정정')) +
+      '<p class="b2bkpi-muted">마감일을 바꾸면 이전 마감일의 집계 내역(관찰 중 제외)은 옛 기준이라 지웁니다. 이력에는 남습니다.</p>' + kpiBox +
+      '<div class="b2bkpi-err" id="b2bKpiErr"></div><div class="b2bkpi-mfoot"><button type="button" class="b2bkpi-btn" data-m="cancel">닫기</button><button type="button" class="b2bkpi-btn is-primary" data-m="saveOfficial">저장</button></div>' +
+      '<h3 class="b2bkpi-offhist-t">바뀐 이력 (최근 20건)</h3>' + officialHistHtml() + '</div></div>';
+  }
+  function readOfficialForm(){
+    var root = modalRoot(), v = {}, items = {};
+    Array.prototype.slice.call(root.querySelectorAll('[data-off]')).forEach(function(x){
+      var k = x.getAttribute('data-off'), p = k.split('.');
+      if(p.length === 2){ items[p[0]] = items[p[0]] || {}; items[p[0]][p[1]] = x.value; } else v[k] = x.value;
+    });
+    v.items = items; return v;
+  }
+  function offErr(text){ var e = document.getElementById('b2bKpiErr'); if(e) e.textContent = text; }
+  function offSave(next, meta, btn){
+    btn.disabled = true; var label = btn.textContent; btn.textContent = '저장 중…';
+    return window.B2BKpiStore.saveOfficial(next, st.offOpenedRev, meta).then(function(r){
+      if(!r.ok){ offErr('다른 팀원이 먼저 저장했습니다. 닫고 다시 열어 최신 값에서 입력해 주세요'); btn.textContent = label; btn.disabled = false; return; }
+      closeModal(); return load();
+    }).catch(function(e){ offErr('저장하지 못했습니다: ' + String(e && e.message || e)); btn.textContent = label; btn.disabled = false; });
+  }
+  function saveOfficialForm(btn){
+    if(btn.disabled) return;
+    var O = window.B2BKpiOfficial, f = readOfficialForm(), cur = (st.shape && st.shape.kpiOfficial) || {};
+    var p = O.plan(cur, f, new Date().toISOString(), f.by, f.reason, kpiNames());
+    if(p.errors.length) return offErr(p.errors.join(' / '));
+    if(!p.changes.length && (f.note || '') === (cur.note || '')){ /* 숫자 그대로여도 메모·관찰 중만 바꿀 수 있다 */ }
+    offSave(p.next, { kind: 'edit', reason: String(f.reason || '').trim(), changes: p.changes }, btn);
+  }
+  function revertOfficial(btn){
+    if(btn.disabled) return;
+    var O = window.B2BKpiOfficial, f = readOfficialForm(), cur = (st.shape && st.shape.kpiOfficial) || {}, id = btn.getAttribute('data-h');
+    var h = ((st.shape && st.shape.kpiOfficialHistory) || {})[id];
+    var p = O.planRevert(cur, h, new Date().toISOString(), f.by);
+    if(p.errors.length) return offErr(p.errors.join(' / ') + (String(f.by || '').trim() ? '' : ' (위 "입력한 사람" 칸에 이름을 넣어 주세요)'));
+    offSave(p.next, { kind: 'revert', reason: '되돌림: ' + ((h && h.reason) || ''), changes: O.diff(cur, p.next, kpiNames()), revertOf: id }, btn);
+  }
   function onModalClick(e){
     var t = e.target.closest && e.target.closest('[data-m]');
     if(!t){ if(e.target.classList && e.target.classList.contains('b2bkpi-ov')) closeModal(); return; }
@@ -482,6 +556,8 @@
     if(m === 'cancel') closeModal();
     else if(m === 'save') saveEditor(t);
     else if(m === 'saveShares') saveShares(t);
+    else if(m === 'saveOfficial') saveOfficialForm(t);
+    else if(m === 'revertOff') revertOfficial(t);
     else if(m === 'addLead' || m === 'addLag'){ var list = modalRoot().querySelector('[data-list="' + (m === 'addLead' ? 'lead' : 'lag') + '"]'); list.insertAdjacentHTML('beforeend', leadRow(null, m === 'addLag')); }
     else if(m === 'rmrow'){ var fs = t.closest('fieldset'); if(fs) fs.remove(); }
   }
@@ -539,6 +615,7 @@
     rd.readAsText(file, 'utf-8');
   }
   var handlers = {
+    officialOpen: function(){ if(!window.B2BKpiOfficial || !st.shape) return; openOfficial(); },
     kpiDetail: function(t){ st.ui.detail = t.getAttribute('data-kpi'); render(); var v = el(); if(v) v.scrollTop = 0; },
     ledgerClear: function(){ st.ui.ledger = null; st.ui.ledgerError = null; render(); },
     actSave: function(){

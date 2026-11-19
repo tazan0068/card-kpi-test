@@ -71,6 +71,9 @@
       row.cutoff = useOff ? (off && off.cutoff || null) : null;
       row.breakdown = useOff ? breakdownOf(o) : [];
       row.observing = row.breakdown.filter(function(x){ return x.key === 'observing'; })[0] || null;
+      // 참고값(예: 구매 포함 KPI1) — 공식 값과 섞지 않고 카드에 한 줄로만 보인다
+      var alt = useOff && o.alt; row.alt = alt && alt.label && isNum(alt.num) && isNum(alt.den) && alt.den > 0 ? { label: String(alt.label), num: alt.num, den: alt.den, value: isNum(alt.value) ? alt.value : alt.num / alt.den * 100, note: alt.note ? String(alt.note) : '' } : null;
+      row.memo = useOff && o.memo ? String(o.memo) : '';
       row.def = k.def; if(!row.unit) row.unit = k.unit || '';
       // 재사용(KPI3)만 하한이 있다 — 도전 95% 대비와 하한 85% 대비를 따로 둔다(종합점수에 어느 쪽을 쓸지는 팀장님 파일에 없어 미확정)
       row.achFloor = k.floor && r.state === 'ok' ? Math.min(100, r.value / k.floor * 100) : null;
@@ -83,7 +86,7 @@
     var ok = rows.filter(function(r){ return r.ach != null; });
     var avg = function(pick){ return ok.length ? ok.reduce(function(s, r){ return s + pick(r); }, 0) / ok.length : null; };
     return { rows: rows, value: avg(function(r){ return r.ach; }), valueFloor: avg(function(r){ return r.achFloor != null ? r.achFloor : r.ach; }), measured: ok.length, total: KPI_IDS.length,
-      cutoff: off && off.cutoff || null, officialNote: off && off.note || null };
+      cutoff: off && off.cutoff || null, officialNote: off && off.note || null, updatedAt: off && off.updatedAt || null, updatedBy: off && off.updatedBy || null };
   }
 
   function leadDefsOf(shape, memberId){
