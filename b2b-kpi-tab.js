@@ -83,6 +83,8 @@
     var gap = r.floorState === 'below' ? '하한 ' + r.floor + '%까지 ' + f1(Math.abs(r.floorGap)) + '%p 부족' : r.floorState === 'between' ? '하한 충족 · 도전까지 ' + f1(Math.abs(r.targetGap)) + '%p' : '도전 목표 달성';
     return '<div class="b2bkpi-floor"><span>도전 ' + r.target + '% 대비 ' + pct(r.ach) + '</span><span>하한 ' + r.floor + '% 대비 ' + pct(r.achFloor) + '</span><b>' + esc(gap) + '</b></div>';
   }
+  /* 저장 시각(UTC ISO)을 이 컴퓨터 시간(한국)으로 'MM-DD HH:mm' 표시 */
+  function localStamp(iso, withYear){ var d = new Date(iso || ''); if(isNaN(d)) return ''; var p = function(n){ return (n < 10 ? '0' : '') + n; }; return (withYear ? d.getFullYear() + '-' : '') + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes()); }
   function cutoffShort(c){ var m = /^\d{4}-(\d{1,2})-(\d{1,2})/.exec(c || ''); return m ? (+m[1]) + '/' + (+m[2]) : '확인분'; }
   function kpiCard(r, withDetail){
     var p = r.floorState ? (r.floorState === 'below' ? pill('warn', '하한 미달') : r.floorState === 'between' ? pill('wait', '하한 충족 · 도전 미달') : pill('ok', '도전 달성'))
@@ -170,7 +172,7 @@
     var persPts = persOk.reduce(function(s, p){ return s + p.points; }, 0);
     var out = '';
     // ① 3대 KPI — 화면 맨 위(카드·마감 확인분 안내·참고 영역)
-    out += sec(N[0], '3대 KPI', (a.cutoff ? esc(cutoffShort(a.cutoff)) + ' 마감 확인분' : '') + (a.updatedBy ? ' · 마지막 입력 ' + esc(a.updatedBy) + ' ' + esc(String(a.updatedAt || '').slice(5, 16).replace('T', ' ')) : ''), '<div class="b2bkpi-kpis">' + a.rows.map(function(r){ return kpiCard(r, !!osOf(ui)); }).join('') + '</div>' +
+    out += sec(N[0], '3대 KPI', (a.cutoff ? esc(cutoffShort(a.cutoff)) + ' 마감 확인분' : '') + (a.updatedBy ? ' · 마지막 입력 ' + esc(a.updatedBy) + ' ' + esc(localStamp(a.updatedAt)) : ''), '<div class="b2bkpi-kpis">' + a.rows.map(function(r){ return kpiCard(r, !!osOf(ui)); }).join('') + '</div>' +
       (a.cutoff ? '<p class="b2bkpi-muted b2bkpi-cutoff"><b>위 3개 값은 ' + esc(cutoffShort(a.cutoff)) + ' 마감 확인분이며 그 뒤 실적은 아직 반영되지 않았습니다.</b> 전체 공식 최신 실적이 아니고, 분모·연결 기준이 달라 다른 숫자와 직접 증감 비교하지 않습니다. 막대는 관측 비율, 세로선은 목표입니다.</p>' : '') +
       referenceArea(a), '<button type="button" class="b2bkpi-btn is-primary b2bkpi-offbtn" data-kpi-act="officialOpen">최신 숫자 입력 · 이력</button>');
     var kpiHtml = out; out = '';
@@ -484,7 +486,7 @@
     var O = window.B2BKpiOfficial, list = O.history(st.shape).slice(0, 20);
     if(!list.length) return '<p class="b2bkpi-muted">아직 이 화면에서 바꾼 기록이 없습니다. 지금 값은 처음 정리된 확인분입니다.</p>';
     return '<div class="b2bkpi-offhist">' + list.map(function(h){
-      var when = String(h.at || '').slice(0, 16).replace('T', ' ');
+      var when = localStamp(h.at, true);
       return '<div class="b2bkpi-offh"><div class="b2bkpi-offh-h"><b>' + esc(when) + '</b> · ' + esc(h.by || '—') + (h.kind === 'revert' ? ' ' + pill('wait', '되돌림') : '') + '</div>' +
         (h.reason ? '<div class="b2bkpi-muted">' + esc(h.reason) + '</div>' : '') +
         '<ul class="b2bkpi-offh-c">' + (h.changes || []).map(function(c){ return '<li>' + esc(c.f) + ': ' + esc(c.from) + ' → <b>' + esc(c.to) + '</b></li>'; }).join('') + '</ul>' +
