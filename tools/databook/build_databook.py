@@ -134,7 +134,9 @@ def main(cfg_path):
                '단지키', '공종키', '사건유형', '사건일', '시간KPI유효', '제외사유']].sort_values('날짜', ascending=False)
 
     # ---------- 03 판매 ----------
-    s = pd.read_csv(P('sales'), encoding='utf-8-sig', low_memory=False)
+    # 판매현황은 파일 하나 또는 여러 개(연도별로 나눈 파일, .csv 또는 .csv.gz)
+    sales_paths = cfg['sales'] if isinstance(cfg['sales'], list) else [cfg['sales']]
+    s = pd.concat([pd.read_csv(p if os.path.isabs(p) else os.path.join(here, p), encoding='utf-8-sig', low_memory=False) for p in sales_paths], ignore_index=True)
     s['거래일'] = pd.to_datetime(s['거래일'], errors='coerce')
     s = s[s['거래일'] <= asof]
     sale = pd.DataFrame({'거래일': s['거래일'].dt.date, '통합ID': s['기존통합ID'], '거래처명(판매 기록)': s['거래처명_원문'],
