@@ -1,0 +1,6 @@
+out/
+원본/
+*.csv
+*.xlsx
+*.xlsm
+config.json

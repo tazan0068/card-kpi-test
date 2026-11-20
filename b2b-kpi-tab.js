@@ -576,8 +576,8 @@
     };
     modalRoot().innerHTML = '<div class="pi-overlay b2bkpi-ov"><div class="pi-panel b2bkpi-modal" role="dialog" aria-modal="true" aria-label="데이터 파일로 최신화"><h3>데이터 파일로 최신화</h3>' +
       '<p class="b2bkpi-muted">쌓고 있는 원장 파일을 고르면 3대 KPI를 같은 정의로 다시 셉니다. 지금 값과 비교해 보고 반영하면 이력이 남고, "직접 고치기 · 이력"에서 되돌릴 수 있습니다.</p>' +
-      fileRow('ledger', '기준 원장 (L2·L3 사건)', true, '예: 한정정규원장.csv — 통합ID·단지키·공종키·사건유형·사건일 열이 있는 파일') +
-      fileRow('cohort', '신규 협약 명단', false, '예: 신규_HTML36_90일.csv — 없으면 KPI1은 지금 값을 그대로 둡니다') +
+      fileRow('ledger', '요청 활동 (L2·L3)', true, '데이터북 생성기의 02_요청활동.csv (예전 한정정규원장.csv도 됨)') +
+      fileRow('cohort', '업체 명부', false, '데이터북 생성기의 01_업체.csv (예전 신규_HTML36_90일.csv도 됨) — 없으면 KPI1은 지금 값을 그대로 둡니다') +
       '<details class="b2bkpi-def"><summary>KPI1 모수 규칙 (업체 통합ID만 · 업체명 쓰지 않기)</summary><div class="b2bkpi-def-b">' +
       '<textarea class="b2bkpi-in b2bkpi-rules" data-ref="rules" rows="5">' + esc(R.rulesText != null ? R.rulesText : window.B2BKpiRefresh.rulesToText(refreshRules())) + '</textarea>' +
       '<p class="b2bkpi-muted">한 줄에 하나: "제외 B2B203 사유" 또는 "추가 B2B205 2026-02-02 사유". 상호 변경된 기존 업체, 지표에서 뺄 업체, 명단에 없는 신규 업체를 여기서 정합니다. 반영할 때 같이 저장되어 다음에도 그대로 씁니다.</p>' +

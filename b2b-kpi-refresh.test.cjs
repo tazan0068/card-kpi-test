@@ -35,3 +35,8 @@ test('toOfficial_same_cutoff_keeps_alt_new_cutoff_drops', () => {
   const b = R.toOfficial(cur, Object.assign({}, comp, { asOf: '2026-11-18' }), 'now', 'x', []);
   assert.equal(b.next.items.MK1.alt, undefined); assert.deepEqual(b.dropped, ['MK1 참고값', 'MK1 메모']); assert.equal(b.next.cutoff, '2026-11-18');
 });
+test('std_company_file_as_cohort', () => {
+  const rows = [{ 통합ID: 'B2B210', 구분: '2026 신규', 협약일: '2026-03-09' }, { 통합ID: 'B2B100', 구분: '2025 이전 기존', 협약일: '2024-01-01' }, { 통합ID: 'B2B300', 구분: '2026 신규', 협약일: '' }];
+  assert.ok(R.isStdCompany(rows)); assert.ok(!R.isStdCompany([{ HTML업체명: 'x' }]));
+  assert.deepEqual(R.stdCohort(rows), [{ id: 'B2B210', mou: '2026-03-09' }, { id: 'B2B300', mou: null }]);
+});

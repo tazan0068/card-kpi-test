@@ -44,6 +44,12 @@
     Object.keys(add).forEach(function(id){ if(!seen[id] && ex[id] === undefined){ out.push({ id: id, mou: add[id].mou }); applied.added++; } });
     return { cohort: out, applied: applied };
   }
+  /* 표준 표 01_업체.csv(데이터북 생성기) — 구분이 'YYYY 신규'이고 협약일이 있는 업체가 KPI1 모수 */
+  function isStdCompany(rows){ var r = rows && rows[0]; return !!(r && '통합ID' in r && '구분' in r && '협약일' in r); }
+  function stdCohort(rows){
+    return rows.filter(function(r){ return /신규$/.test(String(r['구분'] || '').trim()) && r['통합ID']; })
+      .map(function(r){ var m = String(r['협약일'] || '').trim().slice(0, 10); return { id: String(r['통합ID']).trim(), mou: isDate(m) ? m : null }; });
+  }
   function lastDate(events){ var m = ''; (events || []).forEach(function(e){ if(e.date > m) m = e.date; }); return m || null; }
 
   /* 계산 — Ch: B2BKpiChain, D: B2BKpiDetail. ledgerRows 필수, cohortRows 는 KPI1 에만 필요 */
@@ -56,7 +62,7 @@
     res.items.MK3 = { num: k2.num, den: k2.den, observing: k2.observing };
     res.items.MK2 = { num: k3.num, den: k3.den, observing: k3.observing };
     if(a.cohortRows && a.cohortRows.length){
-      var an = D.analyze('MK1', a.cohortRows), ap = applyRules(an.cohort, a.rules);
+      var an = isStdCompany(a.cohortRows) ? { cohort: stdCohort(a.cohortRows) } : D.analyze('MK1', a.cohortRows), ap = applyRules(an.cohort, a.rules);
       var k1 = Ch.kpi1(ap.cohort, ev, asOf);
       res.items.MK1 = { num: k1.num, den: k1.den, observing: k1.observing, unconfirmed: k1.unconfirmed };
       res.applied = ap.applied;
@@ -83,7 +89,7 @@
     return { next: next, dropped: dropped };
   }
 
-  var api = { DEFAULT_RULES: DEFAULT_RULES, rulesToText: rulesToText, parseRules: parseRules, applyRules: applyRules, lastDate: lastDate, compute: compute, toOfficial: toOfficial };
+  var api = { isStdCompany: isStdCompany, stdCohort: stdCohort, DEFAULT_RULES: DEFAULT_RULES, rulesToText: rulesToText, parseRules: parseRules, applyRules: applyRules, lastDate: lastDate, compute: compute, toOfficial: toOfficial };
   if(typeof module !== 'undefined' && module.exports) module.exports = api;
   if(typeof window !== 'undefined') window.B2BKpiRefresh = api;
 })();
