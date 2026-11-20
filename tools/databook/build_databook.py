@@ -12,8 +12,9 @@ config.json 예시(경로는 각자 컴퓨터 기준):
   "asof": "2026-10-20",                       # 자료 기준일(원본이 언제까지의 자료인지)
   "out_dir": "./out",                          # 결과 폴더(날짜 폴더가 그 아래 생김)
   "mou_master": "MOU마스터.csv",                # 협약 명부(통합ID·업체명·협약일·구분)
-  "activity_ledger": "한정정규원장.csv",         # L2·L3 요청 활동 원장(KPI 공식 원천)
-  "platform_export": "POUR플랫폼_List.xlsx",    # 플랫폼(앱) 내보내기 — 시트 '기술자문문의'(L2 추세용)
+  # (선택) "compare_ledger": "한정정규원장.csv"  # 예전 원장과 건수 비교만 할 때
+  "aliases": {"옛상호예시": "B2B000"},          # 상호 변경·표기 차이: 원문 업체명 → 통합ID (실제 목록은 저장소 밖 config에)
+  "platform_export": "POUR플랫폼_List.xlsx",    # 플랫폼(앱) 내보내기 — 기술자문문의(L2)·컨설팅요청_통합·공법설명회이력(L3)
   "sales": "판매현황_정리.csv",                  # 판매현황(거래일·거래처·품목·공급가액·기존통합ID)
   "pt_list": "PT목록.xlsx",                     # 잔디 PT 정리 — 시트 'PT 최종 목록'
   "notices": "26년 POUR 공고문 현황.xlsm",       # 공고문 대시보드 원본 — 시트 '26년 전체 공고문'(7행이 머리줄)
@@ -23,18 +24,20 @@ config.json 예시(경로는 각자 컴퓨터 기준):
 
 ※ 결과 파일에는 업체명이 들어간다. 공개 저장소(깃허브)에 올리지 말 것.
 """
-import json, os, re, sys, datetime as dt, collections
+import json, os, re, sys, datetime as dt, collections, unicodedata
 import pandas as pd, openpyxl
 from openpyxl.styles import PatternFill, Font, Alignment
 
 INTERNAL = re.compile('넷폼|알앤디|경남지사|포어')          # 내부 지사·자사 — 협약사 판정에서 뺌
+TEST = re.compile('테스트|test', re.I)                      # 시험 등록
+mask = lambda s: re.sub(r'\d[\d-]{7,}', '(전화번호 가림)', str(s or '')).strip()   # 이름 칸에 섞인 전화번호는 결과에 남기지 않음
 BASE_FROM, BASE_TO = dt.date(2026, 6, 22), dt.date(2026, 8, 31)   # L2 추세 기준선(이관 구간 이후)
 CMP_FROM, CMP_TO = dt.date(2026, 9, 1), dt.date(2026, 10, 31)     # L2 추세 비교 구간
 
 def ncorp(s):  # 업체명 비교용: 법인 표기·공백 제거
     return re.sub(r'\(주\)|㈜|주식회사|\(유\)|유한회사|\(합\)|\s', '', str(s or ''))
-def nsite(s):  # 단지키: 공백 제거(원장과 같은 규칙)
-    return re.sub(r'\s', '', str(s or ''))
+def nsite(s):  # 단지키: 유니코드 정규화(Ⅱ→II 등) · 공백 제거 · 소문자(원장과 같은 규칙)
+    return re.sub(r'\s', '', unicodedata.normalize('NFKC', str(s or ''))).lower()
 def nsite_match(s):  # 공고·요청 대조용 느슨한 키: 공백·괄호·'아파트' 제거
     return re.sub(r'\s|\(.*?\)|아파트|APT|apt', '', str(s or ''))
 def d(v):
@@ -43,6 +46,50 @@ def d(v):
     if isinstance(v, dt.date): return v
     try: return pd.to_datetime(v).date()
     except Exception: return None
+
+def gkey(s):  # 공종키: 공백 제거·소문자, '+'·','로 나눠 정렬 후 '+'로 이음(원장과 같은 규칙)
+    s = re.sub(r'\s', '', unicodedata.normalize('NFKC', str(s or ''))).lower()
+    return '+'.join(sorted(p for p in re.split(r'[+,]', s) if p))
+
+def build_activity(platform_path, pt_path, to_id, unmatched):
+    """플랫폼 내보내기 3개 시트 + 잔디 PT 목록 → 요청 활동(원장과 같은 열)."""
+    wb = openpyxl.load_workbook(platform_path, read_only=True, data_only=True)
+    ev = []
+    spec = [('기술자문문의', 'L2', '협력사명', '현장명', '공종', '접수일자', '낙찰결과'),
+            ('컨설팅요청_통합', 'L3요청', '업체', '현장명', '공종별', '등록일자', None),
+            ('공법설명회이력', 'L3요청', '시공사', '현장명', '공종', '등록일', None)]
+    for tab, kind, cc, sc, gc, dc, rc in spec:
+        it = wb[tab].iter_rows(values_only=True); h = [str(x or '') for x in next(it)]
+        seen = set()
+        for i, r in enumerate(it, 2):
+            if not any(r): continue
+            r = dict(zip(h, r)); rid = r.get('문의ID(시스템)')
+            if rid and rid in seen: continue      # 같은 문의ID가 두 번 나오면 하나만
+            seen.add(rid); name = r.get(cc); cid = to_id(name)
+            if not cid:
+                if name and not INTERNAL.search(str(name)) and not TEST.search(str(name)): unmatched[(tab, mask(name))] += 1
+                continue
+            ev.append({'event_id': f'{tab}:{rid or i}', '통합ID': cid, '고객명원문': name, '단지원문': r.get(sc), '공종원문': r.get(gc),
+                       '사건유형': kind, '사건일': d(r.get(dc)), '출처': '플랫폼 내보내기', '상태원문': r.get('상태') or '',
+                       '결과원문': (r.get(rc) or '') if rc else '', '제외사유': ''})
+    pt = pd.read_excel(pt_path, sheet_name='PT 최종 목록')
+    for _, r in pt.iterrows():
+        txt = ' '.join(map(str, r.values))
+        if re.search('감리|조현식', txt): continue
+        name = r['PT 요청사/요청자']; cid = to_id(name)
+        if not cid:
+            if isinstance(name, str) and name.strip() and not INTERNAL.search(name) and not TEST.search(name): unmatched[('PT 최종 목록', mask(name))] += 1
+            continue
+        g = r['공사명']; mixed = bool(re.search(r'참여인원|비교\s*설명|빔', str(g)))
+        ev.append({'event_id': f'PT:{r["번호"]}', '통합ID': cid, '고객명원문': name, '단지원문': r['아파트명'], '공종원문': g,
+                   '사건유형': 'L3요청', '사건일': d(r['최초 PT 요청일']), '출처': 'PT 일정 정리(잔디)', '상태원문': str(r['PT 상태']).strip(),
+                   '결과원문': '', '제외사유': '공종에 일정·인원·비교설명 혼합: 시간KPI 제외' if mixed else ''})
+    e = pd.DataFrame(ev)
+    e = e[e['사건일'].notna()].copy(); e['사건일'] = pd.to_datetime(e['사건일'])
+    e['단지키'] = e['단지원문'].map(nsite); e['공종키'] = e['공종원문'].map(gkey)
+    e['시간KPI유효'] = e['제외사유'] == ''
+    e['고객활동유효'] = True
+    return e
 
 def main(cfg_path):
     cfg = json.load(open(cfg_path, encoding='utf-8'))
@@ -57,20 +104,33 @@ def main(cfg_path):
     m['협약일'] = pd.to_datetime(m['협약일'], errors='coerce')
     name2id = {ncorp(n): i for n, i in zip(m['업체명'], m['통합ID']) if pd.notna(i)}
 
-    # ---------- 02 요청 활동 (KPI 공식 원천: 원장) ----------
-    e = pd.read_csv(P('activity_ledger'), encoding='utf-8-sig')
-    e['사건일'] = pd.to_datetime(e['사건일'])
+    # 상호 변경·표기 차이로 명부 이름과 다른 업체명 → 통합ID (config 'aliases')
+    aliases = {ncorp(k): v for k, v in cfg.get('aliases', {}).items()}
+    def to_id(name):
+        k = ncorp(name)
+        return name2id.get(k) or aliases.get(k)
+
+    # ---------- 02 요청 활동 ----------
+    # 기본: 플랫폼(앱) 내보내기 + 잔디 PT 목록에서 직접 만든다(원장 불필요).
+    # 예전 원장 파일을 쓰려면 config에 "activity_source": "ledger" 와 "activity_ledger" 경로를 넣는다.
+    unmatched = collections.Counter()
+    if cfg.get('activity_source', 'platform') == 'ledger':
+        e = pd.read_csv(P('activity_ledger'), encoding='utf-8-sig')
+        e['사건일'] = pd.to_datetime(e['사건일']); e['출처'] = e['원본파일'].astype(str).map(lambda x: '플랫폼 내보내기' if 'sales' in x else ('PT 일정 정리(잔디)' if '잔디' in x else '통합 자료'))
+        e['상태원문'] = ''; e['결과원문'] = ''
+    else:
+        e = build_activity(P('platform_export'), P('pt_list'), to_id, unmatched)
+    e = e[e['사건일'] <= asof]
     act = pd.DataFrame({
         '활동ID': e['event_id'], '날짜': e['사건일'].dt.date, '통합ID': e['통합ID'],
         '단계': e['사건유형'].map({'L2': 'L2 문의', 'L3요청': 'L3 요청'}).fillna(e['사건유형']),
-        '단지': e['단지원문'], '공종': e['공종원문'], '근거': e['요청존재근거'].map({True: '요청 확인', False: '근거 약함'}).fillna(''),
-        '출처': e['원본파일'].astype(str).map(lambda x: '플랫폼 내보내기' if 'sales' in x else ('PT 일정 정리(잔디)' if '잔디' in x else '통합 자료')),
-        '상태': '', '종료 사유': '',            # 앱 전환 후 채울 칸: 진행중/완료(지원마감요청)/종료 + 사유
+        '단지': e['단지원문'], '공종': e['공종원문'], '출처': e['출처'],
+        '상태': e['상태원문'], '종료 사유': e['결과원문'],   # 플랫폼 상태 버튼 값(진행중·완료·종료). 업체가 안 누르면 '진행중'으로 남음
         # 아래 6개 열은 KPI 계산용(고객관리카드 'KPI 데이터 파일로 최신화'가 읽음). 이름을 바꾸지 말 것.
         '단지키': e['단지키'], '공종키': e['공종키'], '사건유형': e['사건유형'], '사건일': e['사건일'].dt.date,
         '시간KPI유효': e['시간KPI유효'], '제외사유': e['제외사유'].fillna('')})
     act = act.merge(m[['통합ID', '업체명']], on='통합ID', how='left')
-    act = act[['활동ID', '날짜', '업체명', '통합ID', '단계', '단지', '공종', '근거', '출처', '상태', '종료 사유',
+    act = act[['활동ID', '날짜', '업체명', '통합ID', '단계', '단지', '공종', '출처', '상태', '종료 사유',
                '단지키', '공종키', '사건유형', '사건일', '시간KPI유효', '제외사유']].sort_values('날짜', ascending=False)
 
     # ---------- 03 판매 ----------
@@ -197,11 +257,18 @@ def main(cfg_path):
          ['L2 추세 판정 업체', f'{len(trend)}곳 중 명부 연결 {int((U["L2 추세(9~10월)"] != "플랫폼 기록 없음").sum())}곳', '플랫폼 협력사명 표기가 명부와 다르면 안 이어짐', '앱 전환 때 통합ID로 고르게 하기'],
          [f'{y} POUR 공고 중 앞선 요청 확인', f'{len(pour)}건 중 {int((pour["앞선 요청"] == "있음").sum())}건 ({pour_req*100:.0f}%)', '공고 단지명과 요청 단지명을 이름으로 대조한 추정값(공고 전 365일)', '앱 요청에 단지 코드(K-APT 단지코드) 남기기'],
          ['같은 지표의 다른 정의', 'KPI마다 2개 이상', '예: KPI1 = 운영기준서(90일 L3 50%) vs 현재(협약 전후 90일 L2·L3, 목표 70%) vs 구매 포함 참고값', '지표 정의서 1장으로 통일']]
+    um = pd.DataFrame([(t, n, c) for (t, n), c in unmatched.most_common()], columns=['원본 시트', '업체명(원문)', '건수'])
+    if len(um):
+        C.insert(2, ['명부에 없는 업체명(요청 기록)', f'{um["업체명(원문)"].nunique()}개 이름 · {int(um["건수"].sum())}건', '상호 변경·표기 차이이거나 비협약 업체. 이 요청은 업체 표에 이어지지 않음', '00_명부에_없는_업체명.csv를 보고 같은 업체면 config의 aliases에 추가'])
+    if cfg.get('compare_ledger'):   # 예전 원장과 비교(전환 확인용)
+        L = pd.read_csv(P('compare_ledger'), encoding='utf-8-sig'); L = L[pd.to_datetime(L['사건일']) <= asof]
+        log.append(f'예전 원장 비교: 원장 {len(L)}건(L2 {(L["사건유형"]=="L2").sum()}·L3 {(L["사건유형"]=="L3요청").sum()}) / 새로 만든 활동 {len(act)}건(L2 {(act["사건유형"]=="L2").sum()}·L3 {(act["사건유형"]=="L3요청").sum()})')
     log += [' · '.join(c[:2]) for c in C]
 
     # ---------- 저장: 표준 표 CSV ----------
     std = {'01_업체.csv': U, '02_요청활동.csv': act, '03_판매.csv': sale, '04_PT.csv': ptt, '05_공고.csv': notice}
     for fn, df in std.items(): df.to_csv(os.path.join(out, fn), index=False, encoding='utf-8-sig')
+    um.to_csv(os.path.join(out, '00_명부에_없는_업체명.csv'), index=False, encoding='utf-8-sig')
     # ---------- 데이터북 xlsx ----------
     readme = [[f'POUR 협약사 데이터북 (자료 기준일 {cfg["asof"]})'], [''], ['이 파일로 할 수 있는 것'],
         ['- 업체 한 줄에서 협약, 문의(L2), 요청(L3), 구매, 9~10월 추세, KPI1 결과를 함께 봄'], ['- 통합ID로 필터하면 요청활동·판매·PT·공고 시트에서 그 업체의 실제 기록을 봄'], [''],
@@ -216,7 +283,7 @@ def main(cfg_path):
     dic = [['업체', '통합ID', '업체 고유 번호(B2Bxxx). 모든 표를 잇는 열쇠', 'MOU 마스터'], ['업체', '구분', '신규(그 해 협약) / 기존 / 협약일 미확인', 'MOU 마스터'],
         ['업체', 'L2 추세', '증가·유지·감소·중단(확실/소수)·판정 보류·신규 활동·이관 구간만', '플랫폼 내보내기'], ['업체', '구매액', '공급가액 합계(반품 차감, 운반비 제외)', '판매현황'],
         ['업체', 'KPI1 대상/결과', '대상·관찰 중·제외 / 활용(L2·L3)·구매로만 활용·미활용', '원장 + 판매현황'],
-        ['요청활동', '단계', 'L2 문의 / L3 요청', '원장'], ['요청활동', '상태·종료 사유', '앱 전환 후 채움: 진행중 / 완료(지원마감요청=L4 도달) / 종료(영업 철수·타공법 전략 수정·타공법 공고·동일공법 타사 낙찰·등록 실수)', '앱'],
+        ['요청활동', '단계', 'L2 문의 / L3 요청', '원장'], ['요청활동', '상태·종료 사유', '플랫폼 상태 버튼 값: 진행중 / 완료(지원마감요청=L4 도달) / 종료(영업 철수·타공법 전략 수정·타공법 공고·동일공법 타사 낙찰·등록 실수). 업체가 안 누르면 진행중으로 남으므로 공고 시트로 확인', '플랫폼(앱) 내보내기'],
         ['요청활동', '단지키·공종키·사건유형·사건일·시간KPI유효·제외사유', 'KPI 계산용. 이름 바꾸지 말 것', '원장'],
         ['판매', '명부 연결', '연결됨 = 거래처명이 명부와 같아 통합ID가 붙음', '판매현황'], ['PT', 'PT 상태', '잔디 기록에서 읽은 상태(요청·예정·취소·진행 여부 미확인 등)', 'PT 목록'],
         ['PT', '실제 진행', '담당자가 채울 칸: 진행 완료 / 취소 / 일정 변경 / 미진행', '담당자 입력'], ['PT', '통합ID', '요청사 이름이 명부와 맞을 때만 붙음', 'PT 목록 + 명부'],

@@ -2,7 +2,7 @@
   "asof": "2026-10-20",
   "out_dir": "./out",
   "mou_master": "원본/MOU마스터_272.csv",
-  "activity_ledger": "원본/한정정규원장.csv",
+  "aliases": { "옛상호예시": "B2B000" },
   "platform_export": "원본/POUR플랫폼_List.xlsx",
   "sales": "원본/판매현황_정리.csv",
   "pt_list": "원본/PT목록_2022-2026.xlsx",
