@@ -1,0 +1,39 @@
+{
+ "asof": "2026-10-20",
+ "generatedAt": "2026-11-20T07:49:54.588Z",
+ "source": "데이터북 생성기 2026-10-20",
+ "items": {
+  "MK1": {
+   "num": 8,
+   "den": 25,
+   "observing": 8,
+   "unconfirmed": 0
+  },
+  "MK3": {
+   "num": 314,
+   "den": 1024,
+   "observing": 166
+  },
+  "MK2": {
+   "num": 44,
+   "den": 79,
+   "observing": 9
+  }
+ },
+ "alt": {
+  "MK1": {
+   "label": "구매 포함",
+   "num": 12,
+   "den": 25,
+   "note": "판매 기록의 업체 연결분만 셈(최소값)"
+  }
+ },
+ "applied": {
+  "excluded": 2,
+  "added": 0,
+  "changed": 2
+ },
+ "warnings": [
+  "원장에서 단지·공종·날짜가 확인되지 않은 2건은 세지 않았습니다"
+ ]
+}

@@ -40,3 +40,11 @@ test('std_company_file_as_cohort', () => {
   assert.ok(R.isStdCompany(rows)); assert.ok(!R.isStdCompany([{ HTML업체명: 'x' }]));
   assert.deepEqual(R.stdCohort(rows), [{ id: 'B2B210', mou: '2026-03-09' }, { id: 'B2B300', mou: null }]);
 });
+test('snapshot_to_official_with_alt', () => {
+  const snap = { asof: '2026-11-19', source: '데이터북 생성기 2026-11-19', items: { MK1: { num: 9, den: 26, observing: 7 }, MK3: { num: 330, den: 1080, observing: 150 }, MK2: { num: 50, den: 90, observing: 8 }, BAD: {} }, alt: { MK1: { label: '구매 포함', num: 13, den: 26, note: '최소값' } } };
+  const c = R.fromSnapshot(snap); assert.equal(c.asOf, '2026-11-19'); assert.deepEqual(Object.keys(c.items), ['MK1', 'MK3', 'MK2']);
+  const t = R.toOfficial({ cutoff: '2026-10-20', rev: 3, items: { MK1: { memo: 'm', alt: { label: 'old', num: 1, den: 2 } } } }, c, 'now', 'AI 자동 갱신', [c.source]);
+  assert.equal(t.next.items.MK1.alt.label, '구매 포함'); assert.equal(t.next.items.MK1.alt.value, 50); assert.equal(t.next.rev, 4); assert.equal(t.next.cutoff, '2026-11-19');
+  assert.deepEqual(t.dropped, ['MK1 메모']);
+  assert.equal(R.fromSnapshot({ asof: 'x', items: {} }), null); assert.equal(R.fromSnapshot({ asof: '2026-01-01', items: { MK1: { num: 5, den: 2 } } }), null);
+});

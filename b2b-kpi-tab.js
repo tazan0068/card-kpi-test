@@ -280,11 +280,25 @@
     v.innerHTML = renderHtml(model, st.ui);
     fillTasks();
   }
+  /* AI 자동 갱신: AI가 저장소에 올린 숫자 파일이 지금 값보다 새 기준일이면 한 번 반영(이력 'AI 자동 갱신', 되돌리기 가능) */
+  function autoApply(){
+    var Rf = window.B2BKpiRefresh, O = window.B2BKpiOfficial;
+    if(!Rf || !O || !window.fetch || st.autoBusy) return;
+    st.autoBusy = true;
+    return fetch('data/kpi-latest.json', { cache: 'no-store' }).then(function(r){ return r.ok ? r.json() : null; }).then(function(snap){
+      var comp = Rf.fromSnapshot(snap), cur = (st.shape && st.shape.kpiOfficial) || {};
+      if(!comp || (cur.cutoff && comp.asOf <= cur.cutoff)) return;
+      var t = Rf.toOfficial(cur, comp, new Date().toISOString(), 'AI 자동 갱신', [comp.source]);
+      return window.B2BKpiStore.saveOfficial(t.next, typeof cur.rev === 'number' ? cur.rev : 0, { kind: 'auto', reason: 'AI 자동 갱신(' + comp.asOf + ' 기준): ' + comp.source, changes: O.diff(cur, t.next, kpiNames()) })
+        .then(function(r){ if(r && r.ok) return window.B2BKpiStore.read().then(function(s){ st.shape = s || st.shape; }); });
+    }).catch(function(){ /* 파일이 없거나 저장 실패면 지금 값을 그대로 둠 */ }).then(function(){ st.autoBusy = false; });
+  }
   function load(){
     if(!window.B2BKpiStore){ st.ui.state = 'error'; st.ui.error = '업무트래커 연결 파일(b2b-kpi-store.js)을 불러오지 못했습니다'; render(); return Promise.resolve(); }
     return window.B2BKpiStore.read().then(function(s){
       st.shape = s || {}; st.ui.state = 'ready'; st.ui.error = null; st.ui.stale = false;
       var d = new Date(); st.ui.loadedAt = (d.getHours() < 10 ? '0' : '') + d.getHours() + ':' + (d.getMinutes() < 10 ? '0' : '') + d.getMinutes();
+      return autoApply();
     }).catch(function(e){
       if(!st.shape){ st.ui.state = 'error'; st.ui.error = String(e && e.message || e); } else st.ui.stale = true;
     }).then(render);
@@ -487,7 +501,7 @@
     if(!list.length) return '<p class="b2bkpi-muted">아직 이 화면에서 바꾼 기록이 없습니다. 지금 값은 처음 정리된 확인분입니다.</p>';
     return '<div class="b2bkpi-offhist">' + list.map(function(h){
       var when = localStamp(h.at, true);
-      return '<div class="b2bkpi-offh"><div class="b2bkpi-offh-h"><b>' + esc(when) + '</b> · ' + esc(h.by || '—') + (h.kind === 'revert' ? ' ' + pill('wait', '되돌림') : h.kind === 'file' ? ' ' + pill('auto', '파일 반영') : '') + '</div>' +
+      return '<div class="b2bkpi-offh"><div class="b2bkpi-offh-h"><b>' + esc(when) + '</b> · ' + esc(h.by || '—') + (h.kind === 'revert' ? ' ' + pill('wait', '되돌림') : h.kind === 'file' ? ' ' + pill('auto', '파일 반영') : h.kind === 'auto' ? ' ' + pill('auto', 'AI 자동 갱신') : '') + '</div>' +
         (h.reason ? '<div class="b2bkpi-muted">' + esc(h.reason) + '</div>' : '') +
         '<ul class="b2bkpi-offh-c">' + (h.changes || []).map(function(c){ return '<li>' + esc(c.f) + ': ' + esc(c.from) + ' → <b>' + esc(c.to) + '</b></li>'; }).join('') + '</ul>' +
         (h.before ? '<button type="button" class="b2bkpi-btn" data-m="revertOff" data-h="' + esc(h.id) + '">이 변경 전 값으로 되돌리기</button>' : '') + '</div>';

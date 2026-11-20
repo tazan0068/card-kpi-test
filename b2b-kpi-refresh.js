@@ -50,6 +50,14 @@
     return rows.filter(function(r){ return /신규$/.test(String(r['구분'] || '').trim()) && r['통합ID']; })
       .map(function(r){ var m = String(r['협약일'] || '').trim().slice(0, 10); return { id: String(r['통합ID']).trim(), mou: isDate(m) ? m : null }; });
   }
+  /* AI가 올린 숫자 파일(data/kpi-latest.json) → compute 결과와 같은 모양 */
+  function fromSnapshot(s){
+    if(!s || !isDate(s.asof) || !s.items) return null;
+    var items = {};
+    ['MK1', 'MK3', 'MK2'].forEach(function(id){ var x = s.items[id]; if(x && typeof x.num === 'number' && typeof x.den === 'number' && x.den > 0 && x.num <= x.den) items[id] = { num: x.num, den: x.den, observing: x.observing || 0 }; });
+    if(!Object.keys(items).length) return null;
+    return { asOf: s.asof, items: items, applied: s.applied || null, alt: s.alt || {}, warnings: s.warnings || [], source: String(s.source || 'AI 자동 갱신') };
+  }
   function lastDate(events){ var m = ''; (events || []).forEach(function(e){ if(e.date > m) m = e.date; }); return m || null; }
 
   /* 계산 — Ch: B2BKpiChain, D: B2BKpiDetail. ledgerRows 필수, cohortRows 는 KPI1 에만 필요 */
@@ -80,8 +88,10 @@
       var o = ci[id] || {}, it = { num: c.num, den: c.den, value: c.den ? round1(c.num / c.den * 100) : 0, unit: UNITS[id] };
       var obsNote = id === 'MK1' && comp.applied ? '모수 규칙: 제외 ' + comp.applied.excluded + ' · 추가 ' + comp.applied.added + ' · 협약일 정정 ' + comp.applied.changed : '';
       it.breakdown = [{ key: 'observing', label: OBS_LABEL, n: c.observing, unit: UNITS[id], note: obsNote }];
-      if(same){ if(o.memo) it.memo = o.memo; if(o.alt) it.alt = o.alt; }
-      else { if(o.alt) dropped.push(id + ' 참고값'); if(o.memo) dropped.push(id + ' 메모'); }
+      var na = comp.alt && comp.alt[id];
+      if(na && na.den){ it.alt = { label: String(na.label || '참고'), num: na.num, den: na.den, value: round1(na.num / na.den * 100), note: String(na.note || '') }; }
+      if(same){ if(o.memo) it.memo = o.memo; if(o.alt && !it.alt) it.alt = o.alt; }
+      else { if(o.alt && !it.alt) dropped.push(id + ' 참고값'); if(o.memo) dropped.push(id + ' 메모'); }
       items[id] = it;
     });
     var next = { cutoff: comp.asOf, note: '파일 계산 · ' + (files || []).join(', '), items: items, source: 'file',
@@ -89,7 +99,7 @@
     return { next: next, dropped: dropped };
   }
 
-  var api = { isStdCompany: isStdCompany, stdCohort: stdCohort, DEFAULT_RULES: DEFAULT_RULES, rulesToText: rulesToText, parseRules: parseRules, applyRules: applyRules, lastDate: lastDate, compute: compute, toOfficial: toOfficial };
+  var api = { fromSnapshot: fromSnapshot, isStdCompany: isStdCompany, stdCohort: stdCohort, DEFAULT_RULES: DEFAULT_RULES, rulesToText: rulesToText, parseRules: parseRules, applyRules: applyRules, lastDate: lastDate, compute: compute, toOfficial: toOfficial };
   if(typeof module !== 'undefined' && module.exports) module.exports = api;
   if(typeof window !== 'undefined') window.B2BKpiRefresh = api;
 })();
