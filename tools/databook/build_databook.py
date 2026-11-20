@@ -226,7 +226,9 @@ def main(cfg_path):
     with pd.ExcelWriter(xl, engine='openpyxl') as W:
         pd.DataFrame(readme).to_excel(W, sheet_name='읽는 법', index=False, header=False)
         U.to_excel(W, sheet_name='업체', index=False); act.to_excel(W, sheet_name='요청활동', index=False)
-        sale[pd.to_datetime(sale['거래일']).dt.year >= y - 1].to_excel(W, sheet_name='판매', index=False)  # 시트 칸 수 한도 때문에 최근 2년만(전체는 03_판매.csv); ptt.to_excel(W, sheet_name='PT', index=False); notice.to_excel(W, sheet_name='공고', index=False)
+        # 판매는 시트 칸 수 한도 때문에 최근 2년만(전체는 03_판매.csv)
+        sale[pd.to_datetime(sale['거래일']).dt.year >= y - 1].to_excel(W, sheet_name='판매', index=False)
+        ptt.to_excel(W, sheet_name='PT', index=False); notice.to_excel(W, sheet_name='공고', index=False)
         pd.DataFrame(C, columns=['확인 항목', '현재', '무슨 뜻인지', '다음에 할 일']).to_excel(W, sheet_name='연결 현황', index=False)
         pd.DataFrame(dic, columns=['표', '열', '뜻', '출처']).to_excel(W, sheet_name='데이터 사전', index=False)
         fill = PatternFill('solid', fgColor='F3F3F3'); gray = PatternFill('solid', fgColor='E8E8E8')
