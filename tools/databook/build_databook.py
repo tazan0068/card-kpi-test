@@ -274,7 +274,7 @@ def main(cfg_path):
         ['- 업체 한 줄에서 협약, 문의(L2), 요청(L3), 구매, 9~10월 추세, KPI1 결과를 함께 봄'], ['- 통합ID로 필터하면 요청활동·판매·PT·공고 시트에서 그 업체의 실제 기록을 봄'], [''],
         ['시트 안내'], ['업체: 협약 명부 한 줄씩. 최근 활동일 순'], ['요청활동: L2 문의·L3 요청 기록. 오른쪽 회색 열은 KPI 계산용'], [f'판매: 자재 판매 기록 {y-1}~{y}년(반품·운반비 포함, 표시로 구분). 전체 기간은 03_판매.csv'],
         ['PT: 공법설명회 요청과 상태. "실제 진행" 칸을 앞으로 채움'], ['공고: 공고문 대시보드의 공고. "앞선 요청"은 같은 단지 요청이 있었는지 이름으로 대조한 추정'],
-        ['연결 현황: 자료끼리 어디가 이어지고 어디가 끊겼는지'], ['데이터 사전: 열의 뜻과 출처'], [''],
+        ['연결 현황: 자료끼리 어디가 이어지고 어디가 끊겼는지'], ['명부 밖 업체명: 요청 기록에는 있는데 명부와 이어지지 않은 이름. 같은 업체면 별칭표(aliases)에 추가'], ['데이터 사전: 열의 뜻과 출처'], [''],
         ['세는 규칙'], ['- L2 문의 = 플랫폼 기술자문 등록(영업 진행 보고). L3 요청 = 내역서(컨설팅) 요청 또는 공법설명회(PT) 요청'],
         ['- 같은 현장이라도 시공사가 다르면 따로 셈. 감리 PT는 세지 않음. 취소된 PT는 PT 시트의 상태로 구분'], ['- 구매액 = 공급가액 합계(반품 차감, 운반비 행 제외). 명부 이름과 정확히 맞은 거래처만'],
         ['- L2 추세 = 6/22~8/31 일평균 대비 9/1~10/31 일평균. ±25% 넘으면 증가·감소. 기준선 3건 이상만 판정'],
@@ -297,13 +297,14 @@ def main(cfg_path):
         sale[pd.to_datetime(sale['거래일']).dt.year >= y - 1].to_excel(W, sheet_name='판매', index=False)
         ptt.to_excel(W, sheet_name='PT', index=False); notice.to_excel(W, sheet_name='공고', index=False)
         pd.DataFrame(C, columns=['확인 항목', '현재', '무슨 뜻인지', '다음에 할 일']).to_excel(W, sheet_name='연결 현황', index=False)
+        um.to_excel(W, sheet_name='명부 밖 업체명', index=False)
         pd.DataFrame(dic, columns=['표', '열', '뜻', '출처']).to_excel(W, sheet_name='데이터 사전', index=False)
         fill = PatternFill('solid', fgColor='F3F3F3'); gray = PatternFill('solid', fgColor='E8E8E8')
         for name, ws in W.sheets.items():
             if name == '읽는 법':
                 ws.column_dimensions['A'].width = 110; continue
             for c in ws[1]: c.fill = fill; c.font = Font(bold=True); c.alignment = Alignment(wrap_text=True, vertical='top')
-            ws.freeze_panes = 'B2' if name not in ('연결 현황', '데이터 사전') else 'A2'
+            ws.freeze_panes = 'B2' if name not in ('연결 현황', '데이터 사전', '명부 밖 업체명') else 'A2'
             for col in ws.columns:
                 head = str(col[0].value or ''); w = min(max(len(head) * 1.6 + 2, 9), 40)
                 ws.column_dimensions[col[0].column_letter].width = w
